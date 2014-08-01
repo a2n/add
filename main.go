@@ -201,6 +201,7 @@ func (s *InitService) getPdfUrl(url string) (string) {
 		if n.Type == html.ElementNode && n.Data == "meta" {
 			for _, v := range n.Attr {
 				if v.Key == "contents" {
+					// FIXME: Add base url as prefix.
 					result = v.Val
 					break;
 				}
