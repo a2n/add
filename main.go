@@ -127,6 +127,12 @@ func (s *InitService) parseJson(data []byte) ([]Document, error) {
 
 	documents := make([]Document, 0)
 	count := len(library.Documents)
+	/*
+	 * FIXME
+	 * The server supports http 1.1 protocol, menas it should making a 
+	 * persistent connection, and download content for speeding up.
+	 *
+	 */
 	for k, v := range library.Documents {
 		fmt.Printf("%d / %d\n", k, count)
 		switch vv := v.(type) {
