@@ -26,6 +26,79 @@ type InitService struct {
     WorkingPath string
 }
 
+func NewInitService() *InitService {
+    return &InitService{}
+}
+
+func (s *InitService) Init(target string) {
+	// Get original path
+    orig, err := os.Getwd()
+    if err != nil {
+        fmt.Println(err)
+        os.Exit(-1)
+    }
+    s.OriginalPath = orig
+
+    // Making working folder
+    if strings.Index(target, "/") == 0 {
+        // Absolute path
+        s.WorkingPath = target
+    } else {
+        // Relative path
+        s.WorkingPath = fmt.Sprintf("%s/%s", s.OriginalPath, target)
+    }
+
+    err = os.Mkdir(s.WorkingPath, os.ModePerm)
+    if err != nil {
+        if os.IsExist(err) {
+            fmt.Println(err)
+            os.Exit(-1)
+        } else {
+            s.OnError(err)
+        }
+    }
+
+    fmt.Printf("Initlizing a working folder in %s\n", s.WorkingPath)
+
+    err = os.Chdir(s.WorkingPath)
+    checkStatus(err)
+
+    // Making metadata folder
+    err = os.Mkdir(".add", os.ModePerm)
+    checkStatus(err)
+
+    // Move to metadata folder
+    err = os.Chdir(".add")
+    checkStatus(err)
+
+/*
+    // Download library json
+    const libraryURL = "https://developer.apple.com/library/ios/navigation/library.json"
+    resp, err := http.DefaultClient.Get(libraryURL)
+    checkStatus(err)
+    if resp.StatusCode != 200 {
+        s.OnError(errors.New("Fail to get library."))
+    }
+
+    data, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        panic(err)
+    }
+	*/
+
+	path := fmt.Sprintf("%s/library.json", s.OriginalPath)
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		panic(err)
+	}
+
+    docs, err := s.parseJson(data)
+    if err != nil {
+        panic(err)
+    }
+    fmt.Printf("count: %d\n", len(docs))
+}
+
 type Document struct {
     Title string
     Id string
@@ -39,105 +112,29 @@ type Library struct {
     Documents []interface{} `json:"documents"`
 }
 
-func NewInitService() *InitService {
-    return &InitService{
-        OriginalPath: "",
-    }
-}
-
-func (s *InitService) Init() {
-    initOpt := flag.String("init", "", "init PATH, set the working folder to PATH.")
-
-     flag.Parse()
-
-	if len(*initOpt) == 0 {
-		return;
-	}
-
-     // Get original path
-     orig, err := os.Getwd()
-     if err != nil {
-         fmt.Println(err)
-         os.Exit(-1)
-     }
-     s.OriginalPath = orig
-
-     // Making working folder
-     if strings.Index(*initOpt, "/") == 0 {
-         // Absolute path
-         s.WorkingPath = *initOpt
-     } else {
-         // Relative path
-         s.WorkingPath = fmt.Sprintf("%s/%s", s.OriginalPath, *initOpt)
-     }
-
-     err = os.Mkdir(s.WorkingPath, os.ModePerm)
-     if err != nil {
-         if os.IsExist(err) {
-             fmt.Println(err)
-             os.Exit(-1)
-         } else {
-             s.OnError(err)
-         }
-     }
-
-     fmt.Printf("Initlizing a working folder in %s\n", s.WorkingPath)
-
-     err = os.Chdir(s.WorkingPath)
-     checkStatus(err)
-
-     // Making metadata folder
-     err = os.Mkdir(".add", os.ModePerm)
-     checkStatus(err)
-
-     // Move to metadata folder
-     err = os.Chdir(".add")
-     checkStatus(err)
-
-     // Download library json
-     const libraryURL = "https://developer.apple.com/library/ios/navigation/library.json"
-     resp, err := http.DefaultClient.Get(libraryURL)
-     checkStatus(err)
-     if resp.StatusCode != 200 {
-         s.OnError(errors.New("Fail to get library."))
-     }
-
-     data, err := ioutil.ReadAll(resp.Body)
-     if err != nil {
-         panic(err)
-     }
-
-     docs, err := s.parseJson(data)
-     if err != nil {
-         panic(err)
-     }
-     fmt.Printf("count: %d\n", len(docs))
-}
-
 func (s *InitService) parseJson(data []byte) ([]Document, error) {
     /*
-       data, err := ioutil.ReadFile("json")
-       if err != nil {
-       return nil, err
-       }
-     */
+	data, err := ioutil.ReadFile("json")
+	if err != nil {
+	   return nil, err
+	}
+    */
 
     library := Library{}
     err := json.Unmarshal(data, &library)
-     if err != nil {
-         return nil, err
-     }
+    if err != nil {
+        return nil, err
+    }
 
     documents := make([]Document, 0)
-    count := len(library.Documents)
     /*
      * FIXME
      * The server supports http 1.1 protocol, menas it should making a 
      * persistent connection, and download content for speeding up.
      *
      */
-    for k, v := range library.Documents {
-        fmt.Printf("%d / %d\n", k, count)
+	const PREFIX = "https://developer.apple.com/library/ios"
+	for _, v := range library.Documents {
         switch vv := v.(type) {
             case []interface{}:
                 docType := vv[2].(float64)
@@ -168,8 +165,7 @@ func (s *InitService) parseJson(data []byte) ([]Document, error) {
                     panic(err)
                 }
 
-                const PREFIX = "https://developer.apple.com/library/ios/navigation"
-                url := fmt.Sprintf("%s/%s", PREFIX, vv[9].(string))
+                url := fmt.Sprintf("%s/%s", PREFIX, strings.Trim(vv[9].(string), "../"))
                 pdfUrl := fmt.Sprintf("%s/%s", PREFIX, s.getPdfUrl(url))
                 doc := Document {
                     Title: vv[0].(string),
@@ -182,6 +178,17 @@ func (s *InitService) parseJson(data []byte) ([]Document, error) {
                 documents = append(documents, doc)
         }
     }
+
+	/*
+	// Get PDF URL
+    count := len(documents)
+	for k, v := range documents {
+        fmt.Printf("%d / %d\n", k, count)
+		pdfURL := fmt.Sprintf("%s/%s", PREFIX, s.getPdfUrl(v.URL))
+		v.PdfURL = pdfURL
+	}
+	*/
+
     data, err = json.MarshalIndent(documents, "", "  ")
     if err != nil {
         panic(err)
@@ -260,10 +267,28 @@ func (s *InitService) OnError(err error) {
 }
 
 func cmdOptions() {
+    initOpt := flag.String("init", "", "init PATH, set the PATH as working folder.")
+	flag.Parse()
+
     init := NewInitService()
-    init.Init()
+	if len(*initOpt) > 0 {
+		init.Init(*initOpt)
+	}
+}
+
+type PersistentConnectionService struct {
+}
+
+func NewPersistentConectionService() *PersistentConnectionService {
+	return &PersistentConnectionService{}
+}
+
+func (s *PersistentConnectionService) Dial() {
+}
+
+func (s *PersistentConnectionService) HangUp() {
 }
 
 func main() {
-    cmdOptions()
+	cmdOptions()
 }
