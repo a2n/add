@@ -134,7 +134,8 @@ func (s *InitService) parseJson(data []byte) ([]Document, error) {
      *
      */
 	const PREFIX = "https://developer.apple.com/library/ios"
-	for _, v := range library.Documents {
+	for k, v := range library.Documents {
+		fmt.Printf("%d / %d\n", k, len(library.Documents))
         switch vv := v.(type) {
             case []interface{}:
                 docType := vv[2].(float64)
@@ -289,6 +290,28 @@ func (s *PersistentConnectionService) Dial() {
 func (s *PersistentConnectionService) HangUp() {
 }
 
+func foo() {
+	orig, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(-1)
+	}
+
+	path := fmt.Sprintf("%s/a/.add/json2", orig)
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(-1)
+	}
+
+	err := json.Unmarshal(data, &library)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(-1)
+	}
+}
+
 func main() {
-	cmdOptions()
+	//cmdOptions()
+	foo()
 }
